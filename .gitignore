@@ -1,3 +1,24 @@
+# Sensitive Credentials (NEVER COMMIT)
 .env
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Python Cache & Bytecode
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Local Databases & Heavy Files
+chroma_db/
 data/
+
+# Generated Test Files
+*.pdf
+
+# IDE / System Configs
+.vscode/
+.idea/
+.DS_Store

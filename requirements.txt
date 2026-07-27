@@ -1,13 +1,27 @@
-langchain
-langchain-community
-langchain-openai
-langchain-ollama
-langgraph
-chromadb
-sentence-transformers
-pypdf
-fastapi
-uvicorn
-python-dotenv
-streamlit
-pydantic
+# Web Frameworks & UI
+fastapi>=0.100.0
+uvicorn>=0.22.0
+streamlit>=1.24.0
+python-multipart>=0.0.6
+
+# AI Orchestration & RAG Core
+langchain>=0.1.0
+langgraph>=0.0.15
+langgraph-checkpoint>=1.0.0
+langchain-core>=0.1.0
+
+# LLM & Embedding Providers
+langchain-google-genai>=0.0.9
+langchain-chroma>=0.1.0
+langchain-huggingface>=0.0.1
+sentence-transformers>=2.2.2
+
+# Vector Database
+chromadb>=0.4.0
+
+# Document Parsing
+pymupdf4llm>=0.0.2
+
+# Utility
+pydantic>=2.0.0
+python-dotenv>=1.0.0

@@ -1,59 +1,72 @@
-import os
-import uuid
-import tempfile
-import pymupdf4llm
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel
+import PyPDF2
+import io
+from src.agents.agents_graph import run_compliance_audit
 
-from src.agents.agents_graph import start_compliance_audit, resume_compliance_audit
-
+# 1. Initialize FastAPI Application
 app = FastAPI(
-    title="Enterprise Multi-Agent Compliance Engine",
-    description="Production-grade AI Multi-Agent Compliance System with HITL & SAR Generation",
-    version="2.0.0"
+    title="Compliance Multi-Agent API",
+    description="An API that runs a multi-agent workflow to audit financial proposals.",
+    version="1.1.0"
 )
 
-class ResumeRequest(BaseModel):
-    thread_id: str
-    approved: bool
+# 2. Define Data Models
+class Violation(BaseModel):
+    clause: str
+    description: str
 
+class AuditResponse(BaseModel):
+    status: str
+    risk_level: str
+    summary: str
+    violations: list[Violation]
+
+class AuditRequest(BaseModel):
+    proposal_text: str
+
+# 3. Create API Endpoints
 @app.get("/")
 async def health_check():
-    return {"status": "ok", "engine": "Enterprise Multi-Agent Compliance Engine v2.0"}
+    return {"status": "ok", "message": "Multi-Agent Compliance API is running"}
 
-@app.post("/audit/file")
-async def audit_file(file: UploadFile = File(...)):
-    """Accepts PDF, converts to structural Markdown, and kicks off stateful agent graph."""
+# Legacy text endpoint (kept for testing)
+@app.post("/audit", response_model=AuditResponse)
+async def audit_proposal(request: AuditRequest):
+    if not request.proposal_text.strip():
+        raise HTTPException(status_code=400, detail="Proposal text cannot be empty.")
+    try:
+        return run_compliance_audit(request.proposal_text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Audit failed: {str(e)}")
+
+# NEW: Document Upload Endpoint
+@app.post("/audit/file", response_model=AuditResponse)
+async def audit_proposal_file(file: UploadFile = File(...)):
+    """Receives a PDF file, extracts text, and runs the compliance audit."""
     if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
     
     try:
-        # Save temp file for PyMuPDF4LLM parsing
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            contents = await file.read()
-            tmp.write(contents)
-            tmp_path = tmp.name
-
-        # Extract structural markdown (preserves tables and headers)
-        proposal_markdown = pymupdf4llm.to_markdown(tmp_path)
-        os.remove(tmp_path)
-
-        if not proposal_markdown.strip():
-            raise HTTPException(status_code=400, detail="Document appears empty or unparseable.")
+        # Read file content into memory
+        contents = await file.read()
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(contents))
+        
+        # Extract text from all pages
+        proposal_text = ""
+        for page in pdf_reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                proposal_text += extracted + "\n"
+                
+        if not proposal_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract text from the PDF. It might be a scanned image.")
             
-        thread_id = str(uuid.uuid4())
-        result = start_compliance_audit(proposal_markdown, thread_id)
-        return result
+        print(f"Extracted {len(proposal_text)} characters from {file.filename}. Starting audit...")
+        
+        # Pass the extracted text to our existing LangGraph system
+        report = run_compliance_audit(proposal_text)
+        return report
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Audit execution failed: {str(e)}")
-
-
-@app.post("/audit/resume")
-async def resume_audit(request: ResumeRequest):
-    """Resumes a paused workflow after human compliance officer approval/rejection."""
-    try:
-        result = resume_compliance_audit(request.thread_id, request.approved)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to resume audit thread: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"File audit failed: {str(e)}")
